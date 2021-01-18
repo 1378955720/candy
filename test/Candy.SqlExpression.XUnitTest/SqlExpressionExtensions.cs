@@ -11,7 +11,7 @@ namespace Candy.SqlExpression.XUnitTest
         /// <returns></returns>
         public static string ToDatebaseField(this MemberExpression mb)
         {
-            return string.Concat(mb.ToString().ToLower().Replace(".", ".\""), "\"");
+            return string.Concat(mb.ToString().ToLower().Replace(".", ".\""), '"');
         }
 
         /// <summary>

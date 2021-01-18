@@ -34,7 +34,7 @@ namespace Candy.XUnitTest
 				["amount"] = 1,
 				["guserId"] = Guid.Empty,
 				["percent"] = 0.01,
-				["remark"] = "Ö÷²¥ÊÕÒæ"
+				["remark"] = "ä¸»æ’­æ”¶ç›Š"
 			});
 			var str = jarr.ToString(Newtonsoft.Json.Formatting.None);
 

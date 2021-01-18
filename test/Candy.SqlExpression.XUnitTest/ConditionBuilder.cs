@@ -1,4 +1,6 @@
-﻿using System;
+﻿using System.Collections.ObjectModel;
+using System.Collections;
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -65,7 +67,7 @@ namespace Candy.SqlExpression.XUnitTest
             Arguments = _arguments.ToArray();
             Condition = _conditionParts.Count > 0 ? _conditionParts.Pop() : null;
         }
-		
+
         protected override Expression VisitBinary(BinaryExpression expression)
         {
             if (expression == null) return expression;
@@ -76,35 +78,26 @@ namespace Candy.SqlExpression.XUnitTest
             var right = _conditionParts.Pop();
             var left = _conditionParts.Pop();
 
-            var opr = expression.NodeType switch
-            {
-                ExpressionType.Equal when right == null || left == null => "is null",
-                ExpressionType.NotEqual when right == null || left == null => "is not null",
-                ExpressionType.Equal => "=",
-                ExpressionType.NotEqual => "<>",
-                ExpressionType.GreaterThan => ">",
-                ExpressionType.GreaterThanOrEqual => ">=",
-                ExpressionType.LessThan => "<",
-                ExpressionType.LessThanOrEqual => "<=",
-                ExpressionType.AndAlso => "AND",
-                ExpressionType.OrElse => "OR",
-                ExpressionType.Add => "+",
-                ExpressionType.Subtract => "-",
-                ExpressionType.Multiply => "*",
-                ExpressionType.Divide => "/",
-                _ => throw new NotSupportedException(expression.NodeType + "is not supported."),
-            };
+            var opr = ExpressionTypeCast(expression.NodeType);
+
             if (left == null)
-                _conditionParts.Push(string.Format("({0} {1})", right.Trim(), opr));
+                _conditionParts.Push(string.Format("{0} {1}", right.Trim(), NullableOperator(opr)));
 
             else if (right == null)
-                _conditionParts.Push(string.Format("({0} {1})", left.Trim(), opr));
+                _conditionParts.Push(string.Format("{0} {1}", left.Trim(), NullableOperator(opr)));
 
             else
-                _conditionParts.Push(string.Format("({0} {1} {2})", left.Trim(), opr, right.Trim()));
+            {
+                var cond = string.Format("{0} {1} {2}", left.Trim(), opr, right.Trim());
 
+                if (expression.NodeType == ExpressionType.AndAlso || expression.NodeType == ExpressionType.OrElse)
+                    cond = string.Concat('(', cond, ')');
+                
+                _conditionParts.Push(cond);
+            }
             return expression;
         }
+        private static string NullableOperator(string opr) => opr == "=" ? "IS NULL" : (opr == "<>" ? "IS NOT NULL" : opr);
 
         protected override Expression VisitConstant(ConstantExpression expression)
         {
@@ -112,9 +105,8 @@ namespace Candy.SqlExpression.XUnitTest
 
 
             if (expression.Value == null)
-            {
                 _conditionParts.Push(null);
-            }
+
             else
             {
                 _arguments.Add(expression.Value);
@@ -134,12 +126,12 @@ namespace Candy.SqlExpression.XUnitTest
             //是否添加引号
             if (_ifWithQuotationMarks)
             {
-                _conditionParts.Push(string.Format(" {0} ", expression.GetOriginalExpression().ToDatebaseField()));
+                _conditionParts.Push(string.Format("{0}", expression.GetOriginalExpression().ToDatebaseField()));
             }
             else
             {
                 // this.m_conditionParts.Push(String.Format("[{0}]", propertyInfo.Name));
-                _conditionParts.Push(string.Format(" {0} ", expression.GetOriginalExpression()));
+                _conditionParts.Push(string.Format("{0}", expression.GetOriginalExpression()));
             }
 
             return expression;
@@ -159,9 +151,9 @@ namespace Candy.SqlExpression.XUnitTest
             if (tmpStr == "null")
             {
                 if (sb.EndsWith(" ="))
-                    sb = sb[0..^1] + " is null";
+                    sb = sb[0..^1] + " IS NULL";
                 else if (sb.EndsWith("<>"))
-                    sb = sb[0..^2] + " is not null";
+                    sb = sb[0..^2] + " IS NOT NULL";
             }
             else
                 sb += tmpStr;
@@ -220,22 +212,28 @@ namespace Candy.SqlExpression.XUnitTest
             return null;
         }
 
-        private static string ExpressionTypeCast(ExpressionType type) => type switch
+        private static readonly IReadOnlyDictionary<ExpressionType, string> ExpressionOperator = new Dictionary<ExpressionType, string>
         {
-            ExpressionType.And or ExpressionType.AndAlso => " AND ",
-            ExpressionType.Equal => " =",
-            ExpressionType.GreaterThan => " >",
-            ExpressionType.GreaterThanOrEqual => ">=",
-            ExpressionType.LessThan => "<",
-            ExpressionType.LessThanOrEqual => "<=",
-            ExpressionType.NotEqual => "<>",
-            ExpressionType.Or or ExpressionType.OrElse => " Or ",
-            ExpressionType.Add or ExpressionType.AddChecked => "+",
-            ExpressionType.Subtract or ExpressionType.SubtractChecked => "-",
-            ExpressionType.Divide => "/",
-            ExpressionType.Multiply or ExpressionType.MultiplyChecked => "*",
-            _ => null,
+            [ExpressionType.And] = "AND",
+            [ExpressionType.AndAlso] = "AND",
+            [ExpressionType.Equal] = "=",
+            [ExpressionType.GreaterThan] = ">",
+            [ExpressionType.GreaterThanOrEqual] = ">=",
+            [ExpressionType.LessThan] = "<",
+            [ExpressionType.LessThanOrEqual] = "<=",
+            [ExpressionType.NotEqual] = "<>",
+            [ExpressionType.Or] = "OR",
+            [ExpressionType.OrElse] = "OR",
+            [ExpressionType.Add] = "+",
+            [ExpressionType.AddChecked] = "+",
+            [ExpressionType.Subtract] = "-",
+            [ExpressionType.SubtractChecked] = "-",
+            [ExpressionType.Divide] = "/",
+            [ExpressionType.Multiply] = "*",
+            [ExpressionType.MultiplyChecked] = "*",
+
         };
+        private static string ExpressionTypeCast(ExpressionType type) => ExpressionOperator.TryGetValue(type, out var value) ? value : throw new NotSupportedException(type + "is not supported.");
         #endregion
 
 
@@ -252,9 +250,9 @@ namespace Candy.SqlExpression.XUnitTest
 
             string format = expression.Method.Name switch
             {
-                "StartsWith" => string.Concat("({0} LIKE ''", connectorWords, "{1}", connectorWords, "'%')"),
-                "Contains" => string.Concat("({0} LIKE '%'", connectorWords, "{1}", connectorWords, "'%')"),
-                "EndsWith" => string.Concat("({0} LIKE '%'", connectorWords, "{1}", connectorWords, "'')"),
+                "StartsWith" => string.Concat("{0} LIKE ''", connectorWords, "{1}", connectorWords, "'%'"),
+                "Contains" => string.Concat("{0} LIKE '%'", connectorWords, "{1}", connectorWords, "'%'"),
+                "EndsWith" => string.Concat("{0} LIKE '%'", connectorWords, "{1}", connectorWords, "''"),
                 "Equals" => "({0} {1})",// not in 或者  in 或 not like
                 _ => throw new NotSupportedException(expression.NodeType + " is not supported!"),
             };
