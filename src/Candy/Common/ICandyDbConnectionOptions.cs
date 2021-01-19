@@ -20,7 +20,7 @@ namespace Candy.Common
 		/// <summary>
 		/// 数据库类型
 		/// </summary>
-		DatabaseType Type { get; }
+		DataBaseType DataBaseType { get; }
 
 		/// <summary>
 		/// 获取dbconnection

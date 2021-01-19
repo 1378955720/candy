@@ -16,12 +16,6 @@ namespace Candy.Model
 		None = 0, Single, Union, Condition, SingleForNoAlias
 	}
 
-	public enum DatabaseType
-	{
-		Postgres = 1,
-		[EditorBrowsable(EditorBrowsableState.Never), Obsolete("Future")]
-		Mysql = 2,
-	}
 	/// <summary>
 	/// 参照的分割字段类型
 	/// </summary>

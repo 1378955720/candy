@@ -5,8 +5,9 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text;
+using Candy.Model;
 
-namespace Candy.SqlExpression.XUnitTest
+namespace Candy.SqlBuilder.ExpressionAnalysis
 {
     internal class ConditionBuilder : ExpressionVisitor
     {
@@ -25,7 +26,7 @@ namespace Candy.SqlExpression.XUnitTest
         public ConditionBuilder(DataBaseType dataBaseType)
         {
             _dataBaseType = dataBaseType;
-            _ifWithQuotationMarks = GetWithQuotationMarks(dataBaseType);
+            _ifWithQuotationMarks = dataBaseType.GetWithQuotationMarks();
         }
 
         public string Condition { get; private set; }
@@ -44,18 +45,6 @@ namespace Candy.SqlExpression.XUnitTest
 
 
         #endregion
-
-
-        /// <summary>
-        /// 获取是否字段加双引号
-        /// </summary>
-        /// <param name="databaseType"></param>
-        /// <returns></returns>
-        public static bool GetWithQuotationMarks(DataBaseType databaseType) => databaseType switch
-        {
-            DataBaseType.PostgreSql or DataBaseType.Oracle => true,
-            _ => false,
-        };
 
         public void Build(Expression expression)
         {
@@ -78,26 +67,25 @@ namespace Candy.SqlExpression.XUnitTest
             var right = _conditionParts.Pop();
             var left = _conditionParts.Pop();
 
-            var opr = ExpressionTypeCast(expression.NodeType);
+            var opr = expression.NodeType.NullableOperatorCast();
 
             if (left == null)
-                _conditionParts.Push(string.Format("{0} {1}", right.Trim(), NullableOperator(opr)));
+                _conditionParts.Push(string.Format("{0} {1}", right.Trim(), opr));
 
             else if (right == null)
-                _conditionParts.Push(string.Format("{0} {1}", left.Trim(), NullableOperator(opr)));
+                _conditionParts.Push(string.Format("{0} {1}", left.Trim(), opr));
 
             else
             {
                 var cond = string.Format("{0} {1} {2}", left.Trim(), opr, right.Trim());
 
-                if (expression.NodeType == ExpressionType.AndAlso || expression.NodeType == ExpressionType.OrElse)
+                if (expression.NodeType.IsBracketsExpressionType())
                     cond = string.Concat('(', cond, ')');
-                
+
                 _conditionParts.Push(cond);
             }
             return expression;
         }
-        private static string NullableOperator(string opr) => opr == "=" ? "IS NULL" : (opr == "<>" ? "IS NOT NULL" : opr);
 
         protected override Expression VisitConstant(ConstantExpression expression)
         {
@@ -122,7 +110,6 @@ namespace Candy.SqlExpression.XUnitTest
             var propertyInfo = expression.Member as PropertyInfo;
             if (propertyInfo == null) return expression;
 
-            //   this.m_conditionParts.Push(String.Format("(Where.{0})", propertyInfo.Name));
             //是否添加引号
             if (_ifWithQuotationMarks)
             {
@@ -130,7 +117,6 @@ namespace Candy.SqlExpression.XUnitTest
             }
             else
             {
-                // this.m_conditionParts.Push(String.Format("[{0}]", propertyInfo.Name));
                 _conditionParts.Push(string.Format("{0}", expression.GetOriginalExpression()));
             }
 
@@ -143,7 +129,7 @@ namespace Candy.SqlExpression.XUnitTest
             //先处理左边
             sb += ExpressionRouter(left);
 
-            sb += ExpressionTypeCast(type);
+            sb += type.ExpressionTypeCast();
 
             //再处理右边
             var tmpStr = ExpressionRouter(right);
@@ -212,28 +198,7 @@ namespace Candy.SqlExpression.XUnitTest
             return null;
         }
 
-        private static readonly IReadOnlyDictionary<ExpressionType, string> ExpressionOperator = new Dictionary<ExpressionType, string>
-        {
-            [ExpressionType.And] = "AND",
-            [ExpressionType.AndAlso] = "AND",
-            [ExpressionType.Equal] = "=",
-            [ExpressionType.GreaterThan] = ">",
-            [ExpressionType.GreaterThanOrEqual] = ">=",
-            [ExpressionType.LessThan] = "<",
-            [ExpressionType.LessThanOrEqual] = "<=",
-            [ExpressionType.NotEqual] = "<>",
-            [ExpressionType.Or] = "OR",
-            [ExpressionType.OrElse] = "OR",
-            [ExpressionType.Add] = "+",
-            [ExpressionType.AddChecked] = "+",
-            [ExpressionType.Subtract] = "-",
-            [ExpressionType.SubtractChecked] = "-",
-            [ExpressionType.Divide] = "/",
-            [ExpressionType.Multiply] = "*",
-            [ExpressionType.MultiplyChecked] = "*",
-
-        };
-        private static string ExpressionTypeCast(ExpressionType type) => ExpressionOperator.TryGetValue(type, out var value) ? value : throw new NotSupportedException(type + "is not supported.");
+        
         #endregion
 
 
@@ -244,7 +209,7 @@ namespace Candy.SqlExpression.XUnitTest
         /// <returns></returns>
         protected override Expression VisitMethodCall(MethodCallExpression expression)
         {
-            string connectorWords = GetLikeConnectorWords(_dataBaseType); //获取like链接符
+            string connectorWords = _dataBaseType.GetLikeConnectorWords(); //获取like链接符
 
             if (expression == null) return expression;
 
@@ -267,19 +232,7 @@ namespace Candy.SqlExpression.XUnitTest
             return expression;
         }
 
-        /// <summary>
-        /// 获得like语句链接符
-        /// </summary>
-        /// <param name="databaseType"></param>
-        /// <returns></returns>
-        public static string GetLikeConnectorWords(DataBaseType databaseType)
-        {
-            return databaseType switch
-            {
-                DataBaseType.PostgreSql or DataBaseType.Oracle or DataBaseType.MySql or DataBaseType.Sqlite => "||",
-                _ => "+",
-            };
-        }
+       
 
     }
 }

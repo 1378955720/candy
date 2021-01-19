@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq.Expressions;
 
-namespace Candy.SqlExpression.XUnitTest
+namespace Candy.SqlBuilder.ExpressionAnalysis
 {
 	public class PartialEvaluator : ExpressionVisitor
 	{
